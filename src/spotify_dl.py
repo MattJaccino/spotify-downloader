@@ -1,9 +1,11 @@
 import json
+import os
 import re
 import signal
 import sys
 import traceback
 from argparse import ArgumentParser
+from base64 import b64decode
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
@@ -30,59 +32,81 @@ OUTPUT_DIR_DEFAULT = str(Path.home()/"Downloads")
 
 ### DOWNLOADER CONSTANTS ###
 
-## Spotifydown constants
-DOWNLOADER_SPOTIFYDOWN = "spotifydown"
-DOWNLOADER_SPOTIFYDOWN_URL = "https://api.spotifydown.com"
-# Clean browser heads for API
-DOWNLOADER_SPOTIFYDOWN_HEADERS = {
-    'Host': 'api.spotifydown.com',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-    'Accept': '*/*',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Accept-Encoding': 'gzip',
-    'Referer': 'https://spotifydown.com/',
-    'Origin': 'https://spotifydown.com',
-    'DNT': '1',
-    'Connection': 'keep-alive',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'same-site',
-    'Sec-GPC': '1',
-    'TE': 'trailers'
+# ## Spotifydown constants
+# DOWNLOADER_SPOTIFYDOWN = "spotifydown"
+# DOWNLOADER_SPOTIFYDOWN_URL = "https://spotifydown.com"
+# DOWNLOADER_SPOTIFYDOWN_API_URL = "https://api.spotifydown.com"
+# # Clean browser heads for API
+# DOWNLOADER_SPOTIFYDOWN_HEADERS = {
+#     'Host': 'api.spotifydown.com',
+#     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+#     'Accept': '*/*',
+#     'Accept-Language': 'en-US,en;q=0.5',
+#     'Accept-Encoding': 'gzip',
+#     'Referer': 'https://spotifydown.com/',
+#     'Origin': 'https://spotifydown.com',
+#     'DNT': '1',
+#     'Connection': 'keep-alive',
+#     'Sec-Fetch-Dest': 'empty',
+#     'Sec-Fetch-Mode': 'cors',
+#     'Sec-Fetch-Site': 'same-site',
+#     'Sec-GPC': '1',
+#     'TE': 'trailers'
+# }
+
+# ## Lucida constants
+# DOWNLOADER_LUCIDA = "lucida"
+# DOWNLOADER_LUCIDA_URL = "https://lucida.su"
+# # Can't support formats that aren't available in mutagen
+# DOWNLOADER_LUCIDA_FILE_FORMATS = [
+#     'original',
+#     'mp3-320', 'mp3-256', 'mp3-128',
+#     'ogg-vorbis-320', 'ogg-vorbis-256', 'ogg-vorbis-128',
+#     'ogg-opus-320', 'ogg-opus-256', 'ogg-opus-128', 'ogg-opus-96', 'ogg-opus-64',
+#     #'opus-320', 'opus-256', 'opus-128', 'opus-96', 'opus-64',
+#     'flac-16',
+#     'm4a-aac-320', 'm4a-aac-256', 'm4a-aac-192', 'm4a-aac-128',
+#     #'bitcrush'
+# ]
+# DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT = "mp3-320"
+# DOWNLOADER_LUCIDA_HEADERS = {
+#     'Host': 'lucida.su',
+#     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+#     'Accept': '*/*',
+#     'Accept-Language': 'en-US,en;q=0.5',
+#     'Accept-Encoding': 'gzip',
+#     'Referer': 'https://spotifydown.com/',
+#     'DNT': '1',
+#     'Connection': 'keep-alive',
+#     'Sec-Fetch-Dest': 'document',
+#     'Sec-Fetch-Mode': 'navigate',
+#     'Sec-Fetch-Site': 'same-origin',
+#     'Sec-GPC': '1'
+# }
+
+## SpotifyMate constants
+DOWNLOADER_SPOTIFYMATE = "spotifymate"
+DOWNLOADER_SPOTIFYMATE_URL = "https://spotifymate.com"
+DOWNLOADER_SPOTIFYMATE_HEADERS = {
+    "Host": "spotifymate.com",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip",
+    "Referer": "https://spotifymate.com/en",
+    "Origin": "https://spotifymate.com",
+    "DNT": "1",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Connection": "keep-alive",
+    "Alt-Used": "spotifymate.com",
+    "Sec-GPC": "1",
+    "Priority": "u=0"
 }
 
-## Lucida constants
-DOWNLOADER_LUCIDA = "lucida"
-DOWNLOADER_LUCIDA_URL = "https://lucida.to"
-# Can't support formats that aren't available in mutagen
-DOWNLOADER_LUCIDA_FILE_FORMATS = [
-    'original',
-    'mp3-320', 'mp3-256', 'mp3-128',
-    'ogg-vorbis-320', 'ogg-vorbis-256', 'ogg-vorbis-128',
-    'ogg-opus-320', 'ogg-opus-256', 'ogg-opus-128', 'ogg-opus-96', 'ogg-opus-64',
-    #'opus-320', 'opus-256', 'opus-128', 'opus-96', 'opus-64',
-    'flac-16',
-    'm4a-aac-320', 'm4a-aac-256', 'm4a-aac-192', 'm4a-aac-128',
-    #'bitcrush'
-]
-DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT = "mp3-320"
-DOWNLOADER_LUCIDA_HEADERS = {
-    'Host': 'lucida.to',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-    'Accept': '*/*',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Accept-Encoding': 'gzip',
-    'Referer': 'https://spotifydown.com/',
-    'DNT': '1',
-    'Connection': 'keep-alive',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'same-origin',
-    'Sec-GPC': '1'
-}
-
-DOWNLOADER_OPTIONS = [DOWNLOADER_LUCIDA, DOWNLOADER_SPOTIFYDOWN]
-DOWNLOADER_DEFAULT = DOWNLOADER_LUCIDA
+DOWNLOADER_OPTIONS = [DOWNLOADER_SPOTIFYMATE] # [DOWNLOADER_LUCIDA, DOWNLOADER_SPOTIFYDOWN, DOWNLOADER_SPOTIFYMATE]
+DOWNLOADER_DEFAULT = DOWNLOADER_SPOTIFYMATE # DOWNLOADER_LUCIDA
 
 MULTI_TRACK_INPUT_URL_TRACK_NUMS_RE = re.compile(r'^https?:\/\/open\.spotify\.com\/(album|playlist)\/[\w]+(?:\?[\w=%-]*|)\|(?P<track_nums>.*)$')
 
@@ -98,6 +122,16 @@ duplicate_downloads_prompted = False
 
 
 ##### Spotify stuff #####
+
+def _get_spotify_token() -> str:
+    token_resp = requests.post(
+        url="https://accounts.spotify.com/api/token?grant_type=client_credentials&client_id="
+            f"{os.getenv('SPOTIFY_CLIENT_ID', input('Enter Spotify client ID: '))}"
+            f"&client_secret={os.getenv('SPOTIFY_CLIENT_SECRET', input("Enter Spotify client secret: "))}", #"https://open.spotify.com/get_access_token",
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0", "Content-Type": "application/x-www-form-urlencoded"}
+    )
+    return token_resp.json()['access_token']
+
 
 class SpotifySong:
     def __init__(
@@ -311,7 +345,7 @@ def validate_config_file(config_file: Path) -> list:
         'skip_duplicate_downloads': (bool, None),
         'duplicate_download_handling': (str, DUPLICATE_DOWNLOAD_CHOICES),
         'filename_template': (str, None),
-        'file_type': (str, DOWNLOADER_LUCIDA_FILE_FORMATS)
+        # 'file_type': (str, DOWNLOADER_LUCIDA_FILE_FORMATS)
     }
 
     with open(config_file) as config_fp:
@@ -389,14 +423,14 @@ def parse_cfg(cfg_path: Path) -> ConfigParser:
         )
         sys.exit(1)
 
-    if (default_file_type := parser.get(CFG_SECTION_HEADER, CFG_DEFAULT_FILE_TYPE_OPTION, fallback=None)) \
-            and (file_type_lower := default_file_type.lower()) not in DOWNLOADER_LUCIDA_FILE_FORMATS:
-        print(
-            f"[!] Cfg file at {cfg_path.absolute()} has an invalid value for "
-            f"'{CFG_DEFAULT_FILE_TYPE_OPTION}': '{file_type_lower}' "
-            f"is not one of {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}"
-        )
-        sys.exit(1)
+    # if (default_file_type := parser.get(CFG_SECTION_HEADER, CFG_DEFAULT_FILE_TYPE_OPTION, fallback=None)) \
+    #         and (file_type_lower := default_file_type.lower()) not in DOWNLOADER_LUCIDA_FILE_FORMATS:
+    #     print(
+    #         f"[!] Cfg file at {cfg_path.absolute()} has an invalid value for "
+    #         f"'{CFG_DEFAULT_FILE_TYPE_OPTION}': '{file_type_lower}' "
+    #         f"is not one of {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}"
+    #     )
+    #     sys.exit(1)
 
     # if (default_download_location := parser.get(CFG_SECTION_HEADER, CFG_DEFAULT_DOWNLOAD_LOCATION_OPTION, fallback=None)) \
     #         and not Path(default_download_location).is_dir():
@@ -462,7 +496,7 @@ def get_downloader_from_user(spotify_dl_cfg: ConfigParser) -> str:
 
     print(
         "\nIf you would like to use a different download source, enter it now.\n"
-        f"Server options: {', '.join(DOWNLOADER_OPTIONS)}.  I'd recommend Lucida."
+        f"Server options: {', '.join(DOWNLOADER_OPTIONS)}."
         f"\n\nDefault: \"{default_downloader}\"\n\n"
     )
 
@@ -481,28 +515,28 @@ def get_downloader_from_user(spotify_dl_cfg: ConfigParser) -> str:
             return downloader_resp_lower
 
 
-def get_file_type_from_user(spotify_dl_cfg: ConfigParser) -> str:
-    default_file_type = spotify_dl_cfg.get(CFG_SECTION_HEADER, CFG_DEFAULT_FILE_TYPE_OPTION, fallback=DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT)
+# def get_file_type_from_user(spotify_dl_cfg: ConfigParser) -> str:
+#     default_file_type = spotify_dl_cfg.get(CFG_SECTION_HEADER, CFG_DEFAULT_FILE_TYPE_OPTION, fallback=DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT)
 
-    print(
-        "\nIf you would like to download using a different audio format, enter it now.\n"
-        f"Formats allowed: {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}.\n\n"
-        f"Default: \"{default_file_type}\"\n\n"
-    )
+#     print(
+#         "\nIf you would like to download using a different audio format, enter it now.\n"
+#         f"Formats allowed: {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}.\n\n"
+#         f"Default: \"{default_file_type}\"\n\n"
+#     )
 
-    # loop until we get something we can use
-    while 1:
-        file_type_resp = input(
-            "File format or press [ENTER] to use default: "
-        )
+#     # loop until we get something we can use
+#     while 1:
+#         file_type_resp = input(
+#             "File format or press [ENTER] to use default: "
+#         )
 
-        if not file_type_resp:
-            return default_file_type
+#         if not file_type_resp:
+#             return default_file_type
 
-        if (file_type_lower := file_type_resp.lower()) not in DOWNLOADER_LUCIDA_FILE_FORMATS:
-            print(f"'{file_type_lower}' is not one of {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}")
-        else:
-            return file_type_lower
+#         if (file_type_lower := file_type_resp.lower()) not in DOWNLOADER_LUCIDA_FILE_FORMATS:
+#             print(f"'{file_type_lower}' is not one of {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}")
+#         else:
+#             return file_type_lower
 
 
 def assemble_str_from_template(
@@ -576,93 +610,203 @@ def set_output_dir(
     return output_dir
 
 
-def _call_spotifydown_api(
-    endpoint: str,
-    method: str = 'GET',
-    headers=None,
-    **kwargs
-) -> requests.Response:
-    _map = {
-        'GET': requests.get,
-        'POST': requests.post
-    }
+# def _download_track_spotifydown(track: SpotifySong) -> requests.Response:
+#     session = requests.Session()
 
-    if not headers:
-        headers=DOWNLOADER_SPOTIFYDOWN_HEADERS
+#     session.send(
+#         requests.Request(
+#             method="GET",
+#             url=DOWNLOADER_SPOTIFYDOWN_URL,
+#             headers={
+#                 "Host": "spotifydown.com",
+#                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0",
+#                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+#                 "Accept-Language": "en-US,en;q=0.5",
+#                 "Accept-Encoding": "gzip",
+#                 "DNT": "1",
+#                 "Alt-Used": "spotifydown.com",
+#                 "Connection": "keep-alive",
+#                 "Referer": "https://spotifydown.com/",
+#                 "Upgrade-Insecure-Requests": "1",
+#                 "Sec-Fetch-Dest": "document",
+#                 "Sec-Fetch-Mode": "navigate",
+#                 "Sec-Fetch-Site": "same-origin",
+#                 "Sec-Fetch-User": "?1",
+#                 "Sec-GPC": "1",
+#                 "Priority": "u=0, i",
+#                 "TE": "trailers"
+#             }
+#         ).prepare()
+#     )
 
-    if method not in _map:
-        raise ValueError
+#     try:
+#         resp = requests.get(f"{DOWNLOADER_SPOTIFYDOWN_API_URL}/download/{track.id}", headers=DOWNLOADER_SPOTIFYDOWN_HEADERS)
+#     except Exception as exc:
+#         raise RuntimeError("ERROR: ", exc)
 
-    try:
-        resp = _map[method](DOWNLOADER_SPOTIFYDOWN_URL + endpoint, headers=headers, **kwargs)
-    except Exception as exc:
-        raise RuntimeError("ERROR: ", exc)
+#     resp_json = resp.json()
 
-    return resp
+#     if not resp_json['success']:
+#         raise RuntimeError(f"Error: {resp.status_code} - {resp_json}")
 
+#     # Clean browser heads for API
+#     hdrs = {
+#         #'Host': 'cdn[#].tik.live', # <-- set this below
+#         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+#         'Accept': '*/*',
+#         'Accept-Language': 'en-US,en;q=0.5',
+#         'Accept-Encoding': 'gzip',
+#         'Referer': 'https://spotifydown.com/',
+#         'Origin': 'https://spotifydown.com',
+#         'DNT': '1',
+#         'Connection': 'keep-alive',
+#         'Sec-Fetch-Dest': 'empty',
+#         'Sec-Fetch-Mode': 'cors',
+#         'Sec-Fetch-Site': 'cross-site',
+#         'Sec-GPC': '1'
+#     }
 
-def _download_track_spotifydown(track: SpotifySong):
-    resp_json = get_track_data(track.id)
+#     if 'link' not in resp_json or 'metadata' not in resp_json:
+#         raise RuntimeError(
+#             f"Bad metadata response for track '{track.artist} - {track.title}': {resp_json}"
+#         )
 
-    # Clean browser heads for API
-    hdrs = {
-        #'Host': 'cdn[#].tik.live', # <-- set this below
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip',
-        'Referer': 'https://spotifydown.com/',
-        'Origin': 'https://spotifydown.com',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-        'Sec-GPC': '1'
-    }
-
-    if 'link' not in resp_json or 'metadata' not in resp_json:
-        raise RuntimeError(
-            f"Bad metadata response for track '{track.artist} - {track.title}': {resp_json}"
-        )
-
-    hdrs['Host'] = resp_json['link'].split('/')[2]
-    return requests.get(resp_json['link'], headers=hdrs)
+#     hdrs['Host'] = resp_json['link'].split('/')[2]
+#     return requests.get(resp_json['link'], headers=hdrs)
 
 
-def _download_track_lucida(track_url: str, file_format=DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT):
-    # Per lemonbar, send max 10 reqs / min, and we already sleep for 1 below.
-    file_format = file_format.lower()
+# def _download_track_lucida(track_url: str, file_format=DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT) -> requests.Response:
+#     # Per lemonbar, send max 10 reqs / min, and we already sleep for 1 below.
+#     file_format = file_format.lower()
 
-    if file_format not in DOWNLOADER_LUCIDA_FILE_FORMATS:
-        raise ValueError(f"File format '{file_format}' is not one of {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}")
+#     if file_format not in DOWNLOADER_LUCIDA_FILE_FORMATS:
+#         raise ValueError(f"File format '{file_format}' is not one of {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}")
 
-    # Grab token from response from Lucida server
-    metadata_req = requests.get(f"https://lucida.to/?url={track_url}").content.decode()
-    token = re.search(r"token:\s?\"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\"", metadata_req)
+#     # Grab token from response from Lucida server
+#     metadata_req = requests.get(
+#         url=f"https://lucida.su/?url={track_url}&country=auto",
+#         headers={
+#             'Host': "lucida.su",
+#             'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0",
+#             'Accept': "text/html",#,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8",
+#             'Accept-Language': "en-US,en;q=0.5",
+#             'Accept-Encoding': "gzip",#, deflate, br, zstd",
+#             'Referer': "https://lucida.su/",
+#             'DNT': "1",
+#             'Connection': "keep-alive",
+#             #'Cookie': "cf_clearance=SyaHxXD5M7mLGW9vlS.ljeBiNBa3LMeyZK9AtBrtkT8-1729096731-1.2.1.1-uPEurBb9v0qWI3ifgmnVR7WCRHGqZbDpXpPkdTIEO_qilE9ymDegpxxWYEs.waLo4WKsVany3LOufnDbSi9XyMhLhFWJm4.b3i12MBufpazy0I_AWnBsxBmrxy3EkZjwknlH3xNrR6WZX_JOGCZQJSjO_ooadSuz1VOMWzDZiDdJG52EXvEAgyftXPgBaHb7FS578mMRP9FASKesfre7amhF9wIvq1Upxgk9lIH_O2DMRbNjk1q4d32wawHiFc_DMXUx76_Cw05ZRCjijMujIeaxMcQ1YzhuEjN4yRGc4X7PrJkd2NBxt1T5Jy6_U1yEixuQGoGzVNf8KW5bTyeNUJ0omMczVqr80_uyW.bmw_E",
+#             'Upgrade-Insecure-Requests': "1",
+#             'Sec-Fetch-Dest': "document",
+#             'Sec-Fetch-Mode': "navigate",
+#             'Sec-Fetch-Site': "same-origin",
+#             'Sec-Fetch-User': "?1",
+#             'Sec-GPC': "1",
+#             'Priority': "u=0, i"
+#         },
+#         allow_redirects=True,
+#     )
+
+#     metadata_req_content_str = metadata_req.content.decode('utf-8', errors='ignore')
+
+#     token = re.search(r"token:\s?\"([\w-]+)\",\s?tokenExpiry:\s?(\d+)", metadata_req_content_str)
+
+#     if not token:
+#         with open('err.html', 'wb') as f:
+#             f.write(metadata_req.content)
+#         raise RuntimeError("Unable to locate token for Lucida", metadata_req.status_code, metadata_req_content_str)
+
+#     dl_target_req = requests.post(
+#         url="https://lucida.su/api/load?url=%2Fapi%2Ffetch%2Fstream%2Fv2",
+#         json={
+#             "url": track_url,
+#             "metadata": True,
+#             "private": True,
+#             "handoff": True,
+#             "account": {"type": "country", "id": "auto"},
+#             "upload": {"enabled": False, "service": "pixeldrain"},
+#             # downscale args: mp3-320, mp3-256, mp3-128, ogg-320, ogg-256, ogg-128, ...
+#             "downscale": file_format,
+#             "token": {
+#                 # double b64-decoded str
+#                 "primary": b64decode(b64decode(token.group(1).encode())).decode(),
+#                 "expiry": token.group(2)
+#             }
+#         },
+#         headers={
+#             "Referer": metadata_req.url,
+#             "Origin": "https://lucida.su"
+#         }
+#     )
+
+#     if not dl_target_req.ok:
+#         raise RuntimeError(f"Bad dl target response: [{dl_target_req.status_code}] {dl_target_req.content.decode()}")
+
+#     dl_target_req_json = dl_target_req.json()
+
+#     if not dl_target_req_json.get('success'):
+#         raise RuntimeError(f"Bad dl target JSON response: [{dl_target_req.status_code}] {dl_target_req.content.decode()}")
+
+#     resp = requests.get(
+#         f"https://lucida.su/api/load?url=%2Fapi%2Ffetch%2Frequest%2F{dl_target_req_json['handoff']}&force={dl_target_req_json['name']}",
+#         allow_redirects=False
+#     )
+
+#     if not resp.ok:
+#         raise RuntimeError(f"Bad response from API load: [{resp.status_code}] {resp.content.decode()}")
+
+#     sleep(1)
+
+#     try:
+#         resp = requests.get(resp.url)
+#         while resp.json()['status'] != "completed": #in ["ripping", "metadata", "downscale"]:
+#             sleep(1)
+#             resp = requests.get(resp.url)
+#     except Exception as exc:
+#         raise RuntimeError(f"Unexpected error during download: {exc} -- [{resp.status_code}] {resp.content.decode()}")
+
+#     return requests.get(
+#         f"https://{dl_target_req_json['name']}.lucida.su/api/fetch/request/{dl_target_req_json['handoff']}/download"
+#     )
+
+def _download_track_spotifymate(track_url: str) -> requests.Response:
+    session = requests.Session()
+    page_resp = session.send(requests.Request('GET',"https://spotifymate.com/en").prepare())
+
+    token_re=re.compile(r"Paste URL from Spotify.*\s*<input name=\"([\w_-]+)\" type=\"hidden\" value=\"(\w+)\" />")
+
+    token=token_re.search(page_resp.content.decode())
+
     if not token:
-        raise RuntimeError("Unable to locate token for Lucida")
+        raise RuntimeError("Token not found in response for Spotifymate title page.")
 
-    sleep(5)
-
-    # downscale args: mp3-320, mp3-256, mp3-128, ogg-320, ogg-256, ogg-128
-    return requests.get(
-        f"https://hund.lucida.to/api/fetch/stream?url={track_url}"
-        f"&downscale={file_format}&meta=true&private=true&country=auto&csrf={token.group(1)}"
+    track_search_req = requests.Request(
+        method='POST',
+        url="https://spotifymate.com/action",
+        files={
+            'url':(None, track_url),
+            token.group(1): (None, token.group(2))
+        },
+        headers=DOWNLOADER_SPOTIFYMATE_HEADERS,
+        cookies=page_resp.cookies
     )
 
+    r2 = session.send(track_search_req.prepare())
 
-def get_track_data(track_id: str):
-    resp = _call_spotifydown_api(f"/download/{track_id}")
+    dl_re = re.compile(r"href=\"([\w\?:/.=]+)\".*Download Mp3")
 
-    resp_json = resp.json()
+    dl_url = dl_re.search(r2.content.decode())
 
-    if not resp_json['success']:
-        # print("[!] Bad URL. No song found.")
-        resp_json = {}
+    if not dl_url:
+        raise RuntimeError("Download URL not found in response.")
 
-    return resp_json
 
+    return session.send(
+        requests.Request(
+            method='GET',
+            url=dl_url.group(1),
+            headers=DOWNLOADER_SPOTIFYMATE_HEADERS
+        ).prepare()
+    )
 
 def get_tracks_to_download(
     interactive: bool,
@@ -857,16 +1001,16 @@ def download_track(
     output_dir: str,
     create_dir: bool,
     downloader: str = DOWNLOADER_DEFAULT,
-    file_type: str = DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT,
+    # file_type: str = DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT,
     interactive: bool = False,
     duplicate_download_handling: str = DUPLICATE_DOWNLOAD_CHOICE_DEFAULT,
     skip_duplicates: bool = False
 ):
-    if downloader == DOWNLOADER_LUCIDA:
-        # This might come back to bite me in the ass. need to infer file type
-        file_ext = file_type.split('-')[0] if file_type != 'original' else "ogg"
-    elif downloader == DOWNLOADER_SPOTIFYDOWN:
-        file_ext = "mp3"
+    # if downloader == DOWNLOADER_LUCIDA:
+    #     # This might come back to bite me in the ass. need to infer file type
+    #     file_ext = file_type.split('-')[0] if file_type != 'original' else "ogg"
+    # else:
+    file_ext = "mp3"
 
     track_filename = re.sub(r'[<>:"/\|\\?*]', '_', f"{out_file_title}.{file_ext}")
 
@@ -942,11 +1086,17 @@ def download_track(
 
     print(f"Downloading: '{out_file_title}'...")
 
-    if downloader == DOWNLOADER_LUCIDA:
-        audio_dl_resp = _download_track_lucida(track_url=track.url, file_format=file_type)
+    if downloader == DOWNLOADER_SPOTIFYMATE:
+        audio_dl_resp = _download_track_spotifymate(track_url=track.url)
 
-    elif downloader == DOWNLOADER_SPOTIFYDOWN:
-        audio_dl_resp = _download_track_spotifydown(track=track)
+    # elif downloader == DOWNLOADER_LUCIDA:
+    #     audio_dl_resp = _download_track_lucida(track_url=track.url, file_format=file_type)
+
+    # elif downloader == DOWNLOADER_SPOTIFYDOWN:
+    #     audio_dl_resp = _download_track_spotifydown(track=track)
+
+    else:
+        raise ValueError(f"Unrecognized downloader: '{downloader}'")
 
     # Lucida returns HTML when it has a problem
     if not audio_dl_resp.ok \
@@ -1006,7 +1156,7 @@ def download_all_tracks(
     output_dir: str = OUTPUT_DIR_DEFAULT,
     create_dir: bool = False,
     downloader: str = DOWNLOADER_DEFAULT,
-    file_type: str = DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT,
+    # file_type: str = DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT,
     debug_mode: bool = False
 ) -> list:
     downloader = spotify_dl_cfg.get(CFG_SECTION_HEADER, CFG_DEFAULT_DOWNLOADER_OPTION, fallback=downloader)
@@ -1040,7 +1190,7 @@ def download_all_tracks(
                 output_dir=output_dir,
                 create_dir=create_dir,
                 downloader=downloader,
-                file_type=file_type,
+                # file_type=file_type,
                 interactive=interactive,
                 duplicate_download_handling=duplicate_download_handling,
                 skip_duplicates=skip_duplicate_downloads
@@ -1048,8 +1198,10 @@ def download_all_tracks(
 
         except Exception as exc:
             print("\tDownload failed!")
+            
+            print("!!!",exc)
 
-            broken_tracks.append((track_obj, out_file_title, output_dir, create_dir))
+            broken_tracks.append((track_obj, out_file_title, output_dir, create_dir, idx))
 
             if debug_mode:
                 with open('.spotify_dl_err.txt', 'a') as debug_fp:
@@ -1080,7 +1232,7 @@ def spotify_downloader(
     skip_duplicate_downloads: bool = None,
     debug_mode: bool = None,
     filename_template: str = FILENAME_TEMPLATE_DEFAULT,
-    file_type: str = DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT
+    # file_type: str = DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT
 ):
     loop_prompt = True
 
@@ -1102,7 +1254,7 @@ def spotify_downloader(
                 create_dir=create_dir,
                 duplicate_download_handling=duplicate_download_handling,
                 skip_duplicate_downloads=skip_duplicate_downloads,
-                file_type=file_type,
+                # file_type=file_type,
                 debug_mode=debug_mode
             )
         )
@@ -1141,15 +1293,15 @@ def parse_args():
         default=DOWNLOADER_DEFAULT,
         help=f"Specify download server to use. Defaults to '{DOWNLOADER_DEFAULT}'."
     )
-    parser.add_argument(
-        '-t',
-        '--file-type',
-        type=str,
-        choices=DOWNLOADER_LUCIDA_FILE_FORMATS,
-        default=DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT,
-        help=f"Specify audio file format to download.  Must be one of {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}. "
-            f"Defaults to '{DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT}'."
-    )
+    # parser.add_argument(
+    #     '-t',
+    #     '--file-type',
+    #     type=str,
+    #     choices=DOWNLOADER_LUCIDA_FILE_FORMATS,
+    #     default=DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT,
+    #     help=f"Specify audio file format to download.  Must be one of {', '.join(DOWNLOADER_LUCIDA_FILE_FORMATS)}. "
+    #         f"Defaults to '{DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT}'."
+    # )
     parser.add_argument(
         '-o',
         '--output',
@@ -1209,10 +1361,7 @@ def parse_args():
 def main():
     print('', '=' * 48, '||          Spotify Song Downloader v0.2.1           ||', '=' * 48, sep='\n', end='\n\n')
 
-    # Grab token anyway
-    token_resp = requests.get("https://open.spotify.com/get_access_token")
-    # clientId, accessToken
-    token = token_resp.json()['accessToken']
+    token = _get_spotify_token()
 
     spotify_dl_cfg = parse_cfg(Path.home()/".spotify_dl.cfg")
 
@@ -1225,10 +1374,10 @@ def main():
 
         filename_template = get_filename_template_from_user(spotify_dl_cfg)
 
-        if downloader == DOWNLOADER_LUCIDA:
-            out_file_type = get_file_type_from_user(spotify_dl_cfg)
-        else:
-            out_file_type = "mp3"
+        # if downloader == DOWNLOADER_LUCIDA:
+        #     out_file_type = get_file_type_from_user(spotify_dl_cfg)
+        # else:
+        out_file_type = "mp3"
 
         broken_tracks = spotify_downloader(
             interactive=interactive,
@@ -1296,7 +1445,7 @@ def main():
                         skip_duplicate_downloads=entry.get('skip_duplicate_downloads', False),
                         debug_mode=args.debug,
                         filename_template=entry.get('filename_template'),
-                        file_type=entry.get('file_type', DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT)
+                        # file_type=entry.get('file_type', DOWNLOADER_LUCIDA_FILE_FORMAT_DEFAULT)
                     )
                 )
 
@@ -1332,7 +1481,8 @@ def main():
                     break
 
                 print(f"\nAttempt {i + 1} of {num_retries}")
-                for track, out_file_title, output_dir, create_dir in broken_tracks.copy():
+                for track, out_file_title, output_dir, create_dir, idx in broken_tracks.copy():
+
                     try:
                         download_track(
                             track=track,
@@ -1343,10 +1493,12 @@ def main():
                             downloader=downloader,
                             file_type=out_file_type
                         )
-                    except Exception:
+
+                    except Exception as exc:
                         print("\tDownload failed!")
+
                     else:
-                        broken_tracks.remove((track, out_file_title, output_dir, create_dir))
+                        broken_tracks.remove((track, out_file_title, output_dir, create_dir, idx))
                 sleep(1)
 
         if interactive:
