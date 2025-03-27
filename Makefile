@@ -1,7 +1,7 @@
 spotify_dl:
 	echo "\n*Building with PyInstaller*\n"
 	python -m venv env
-	./env/Scripts/activate
+	source ./env/Scripts/activate
 	pip install -r requirements.txt
 	./env/Scripts/deactivate
 	pip install pyinstaller

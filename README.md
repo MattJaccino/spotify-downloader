@@ -4,6 +4,24 @@ Spotify song downloader using API created by [lucida.to](https://lucida.to/) _(S
 
 The script `src/spotify_dl.py` can be run in interactive mode or CLI mode.
 
+
+## Build the binary
+
+To generate a .exe for this tool, with Python installed, run the following commands:
+```shell
+git clone https://github.com/MattJaccino/spotify-downloader.git
+cd spotify-downloader/
+python -m venv ./venv
+cd venv/
+source ./Scripts/activate
+pip install -r requirements.txt
+pip install pyinstaller
+pyinstaller src/spotify_dl.py --onefile --paths ./venv/Lib/site-packages
+```
+
+The directory `dist/` will contain the executable.
+
+
 ## Interactive mode
 
 When run without any arguments, interactive mode is used.  The user is prompted for URLs of songs or playlists.  If a playlist is given, the user has the option to download individual songs from that playlist or all of them as well as the ability to see the songs in the playlist prior to making a decision.  The default download directory is the user's `Downloads/` directory, e.g. `C:\Users\[USER]\Downloads\`.  The user is prompted if they want to change the directory prior to downloading the songs.  Template variables can be used in the path.
